@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>우리 반 공감월드</title>
+  
+  <!-- 폰트: Jua -->
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+  
+  <!-- MediaPipe Hands & FaceMesh CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+  <!-- Firebase Realtime DB SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Jua', sans-serif; }
+    body {
+      background: #81ecec; display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; color: #333;
+    }
+
+    /* 대문 (로그인) */
+    #login-screen {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+      justify-content: center; align-items: center; z-index: 1000; color: white;
+    }
+    .login-box {
+      background: #fff; color: #333; padding: 40px; border-radius: 25px; text-align: center;
+      border: 5px dashed #ff9f43; max-width: 450px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .login-box input {
+      font-size: 20px; padding: 12px; border: 2px solid #ccc; border-radius: 12px; margin: 15px 0;
+      width: 100%; text-align: center; outline: none;
+    }
+    .login-box button {
+      font-size: 20px; padding: 12px 30px; background: #ff9f43; color: white; border: none;
+      border-radius: 12px; cursor: pointer; transition: 0.2s; width: 100%;
+    }
+    .login-box button:hover { background: #ee5253; }
+    .sync-status { font-size: 13px; color: #10ac84; margin-top: 10px; font-weight: bold; }
+
+    /* 다이어리 껍데기 */
+    .cyworld-wrapper {
+      position: relative; width: 1050px; height: 690px; background: #00cec9;
+      border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: none;
+    }
+    .diary-container {
+      width: 100%; height: 100%; background: #f1f2f6; border-radius: 10px;
+      border: 2px dashed #ffffff; display: flex; position: relative;
+    }
+    .diary-spine {
+      width: 40px; height: 100%; background: linear-gradient(to right, #e1e1e1, #ffffff, #e1e1e1);
+      border-left: 1px solid #ccc; border-right: 1px solid #ccc; z-index: 5;
+      display: flex; flex-direction: column; justify-content: space-evenly; align-items: center;
+    }
+    .ring { width: 25px; height: 8px; background: #555; border-radius: 10px; }
+
+    /* 좌측 프로필 */
+    .left-pane { width: 300px; padding: 15px; display: flex; flex-direction: column; }
+    .visit-count { font-size: 13px; color: #666; text-align: center; margin-bottom: 8px; }
+    .visit-count span { color: #ff4757; font-weight: bold; }
+    .profile-card {
+      flex: 1; background: #fff; border: 1px solid #ccc; border-radius: 10px; padding: 12px;
+      display: flex; flex-direction: column; align-items: center; position: relative;
+    }
+    .today-is {
+      width: 100%; padding: 5px; font-size: 15px; border: 1px solid #ddd; color: #2e86de;
+      margin-bottom: 8px; text-align: center; cursor: pointer;
+    }
+
+    .acorn-wallet {
+      width: 100%; background: #ffeaa7; border: 1px solid #fdcb6e; padding: 5px;
+      border-radius: 8px; text-align: center; font-size: 14px; margin-bottom: 8px; color: #d35400;
+    }
+
+    /* 상반신 정면 캐릭터 레이어 */
+    .avatar-upper-box {
+      width: 150px; height: 150px; border-radius: 15px; position: relative;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.1); margin-bottom: 8px; overflow: hidden;
+    }
+    .avatar-layer { position: absolute; text-align: center; width: 100%; }
+    
+    .layer-clothes { font-size: 60px; z-index: 1; top: 48px; } 
+    .layer-animal-head { font-size: 75px; z-index: 2; top: -5px; } 
+    .layer-accessory { font-size: 35px; z-index: 3; top: -8px; } 
+
+    .intro-text { font-size: 14px; text-align: center; color: #555; line-height: 1.3; }
+    .my-name { font-size: 18px; color: #222; font-weight: bold; margin-top: 2px; }
+
+    /* 최근 방문자 목록 */
+    .visitor-log-box {
+      width: 100%; background: #fff; border: 1px solid #ddd; border-radius: 8px;
+      padding: 6px 10px; margin-top: 8px; font-size: 12px; color: #444;
+    }
+    .visitor-log-title { font-weight: bold; color: #e17055; margin-bottom: 3px; font-size: 13px; }
+    .visitor-list { display: flex; flex-wrap: wrap; gap: 4px; line-height: 1.2; }
+    .visitor-tag { background: #ffeaa7; padding: 2px 6px; border-radius: 10px; color: #d35400; }
+
+    /* BGM 플레이어 */
+    .bgm-box {
+      width: 100%; background: #dfe6e9; padding: 6px; border-radius: 8px; margin-top: 8px;
+      display: flex; flex-direction: column; gap: 4px; font-size: 12px; text-align: center;
+    }
+    .bgm-controls { display: flex; gap: 5px; justify-content: center; align-items: center; }
+    .bgm-btn { padding: 3px 8px; background: #00cec9; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; }
+
+    /* 우측 메인 */
+    .right-pane { flex: 1; padding: 20px 25px; display: flex; flex-direction: column; position: relative; }
+    .right-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .hompy-title { font-size: 21px; color: #2e86de; font-weight: bold; display: flex; align-items: center; gap: 5px; }
+    .edit-btn { cursor: pointer; font-size: 15px; color: #888; }
+    .edit-btn:hover { color: #e17055; }
+    .friends-visit-btn {
+      background: #ff9f43; color: white; border: none; padding: 6px 14px;
+      border-radius: 15px; font-size: 14px; cursor: pointer; font-weight: bold;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1); transition: 0.2s;
+    }
+    .friends-visit-btn:hover { background: #ee5253; }
+
+    .content-box {
+      flex: 1; border: 1px solid #ccc; background: #fff; border-radius: 15px;
+      position: relative; overflow: hidden; display: flex; flex-direction: column;
+    }
+    
+    /* 세로 탭 메뉴 */
+    .tab-menu { position: absolute; right: -75px; top: 40px; display: flex; flex-direction: column; gap: 5px; }
+    .tab-btn {
+      width: 75px; height: 40px; background: #00cec9; color: #fff; font-size: 15px;
+      border: 1px solid #00b894; border-left: none; border-radius: 0 10px 10px 0;
+      cursor: pointer; text-align: left; padding-left: 8px; transition: 0.2s;
+    }
+    .tab-btn:hover, .tab-btn.active { background: #fff; color: #00cec9; font-weight: bold; }
+
+    .page { display: none; width: 100%; height: 100%; flex-direction: column; }
+    .page.active { display: flex; }
+
+    /* 메인 홈 (공감 나무) */
+    #page-home { background: #ffeaa7; position: relative; }
+    .tree-graphic {
+      flex: 1; 
+      background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><path fill="%2378e08f" d="M100 10 C30 10 10 70 40 120 C10 160 60 190 100 170 C140 190 190 160 160 120 C190 70 170 10 100 10 Z"/><path fill="%23e1b12c" d="M85 150 L115 150 L110 200 L90 200 Z"/></svg>') no-repeat center bottom;
+      background-size: 380px; position: relative;
+    }
+    .fruit { position: absolute; font-size: 40px; cursor: pointer; transition: 0.2s; animation: bounceIn 0.5s; filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.2)); }
+    .fruit:hover { transform: scale(1.25); }
+    .fruit span {
+      background: rgba(255,255,255,0.95); font-size: 12px; padding: 2px 6px; border-radius: 5px;
+      position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%); color: #d35400; white-space: nowrap; font-weight: bold;
+    }
+    @keyframes bounceIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+    .what-friends-say {
+      height: 90px; background: #fff; border-top: 1px dashed #ccc; padding: 10px;
+      overflow-y: auto; font-size: 14px; line-height: 1.6; color: #555;
+    }
+
+    /* 꾸미기 탭 */
+    #page-deco { padding: 20px; background: #fff; overflow-y: auto; }
+    .deco-section { margin-bottom: 20px; }
+    .deco-title { font-size: 18px; color: #e17055; margin-bottom: 8px; border-bottom: 2px dashed #eee; padding-bottom: 4px;}
+    .deco-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .opt-btn { font-size: 24px; padding: 8px 12px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; background: #fff; position: relative; }
+    .opt-btn .price-tag { font-size: 12px; display: block; color: #d35400; margin-top: 2px; }
+    
+    .bg-horizontal-list { display: flex; flex-direction: row; gap: 12px; width: 100%; overflow-x: auto; padding-bottom: 5px; }
+    .bg-opt-item { width: 55px; height: 55px; border-radius: 12px; cursor: pointer; border: 3px solid #ddd; flex-shrink: 0; transition: transform 0.2s; }
+    .bg-opt-item:hover { transform: scale(1.1); border-color: #ff9f43; }
+
+    /* 공감 편지 & 공감 일기 */
+    .form-container { padding: 25px; background: #fff; display: flex; flex-direction: column; height: 100%; overflow-y: auto; }
+    .form-input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 12px; }
+    textarea.form-input { height: 110px; resize: none; }
+    .submit-btn { width: 100%; padding: 12px; background: #ff9f43; color: #fff; font-size: 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    .submit-btn:hover { background: #ee5253; }
+    
+    .diary-card-list { margin-top: 15px; display: flex; flex-direction: column; gap: 10px; }
+    .diary-card { background: #f8f9fa; border: 1px solid #e9ecef; border-left: 4px solid #ff9f43; padding: 10px 14px; border-radius: 6px; font-size: 14px; }
+    .diary-card .date { font-size: 11px; color: #888; margin-bottom: 4px; }
+
+    /* 공감 튜토리얼 (웹캠) */
+    #page-practice { padding: 15px; background: #2d3436; color: #fff; text-align: center; position: relative; }
+    .step-badge { background: #fdcb6e; color: #2d3436; padding: 4px 15px; border-radius: 20px; font-size: 16px; display: inline-block; margin-bottom: 5px; font-weight: bold; }
+    #webcam-container { position: relative; width: 100%; height: 300px; margin-top: 10px; border-radius: 15px; overflow: hidden; background: #000; }
+    #webcam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    #canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); z-index: 2; }
+    #animal-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 100px; opacity: 0.85; z-index: 1; pointer-events: none; }
+    .mission-text { margin-top: 10px; font-size: 17px; color: #ffeaa7; }
+
+    /* 모달 팝업 */
+    .modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 100; }
+    .modal-content { background: #fff; padding: 25px; border-radius: 20px; width: 80%; text-align: center; border: 3px dashed #ff9f43; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+    .modal-content h3 { color: #2e86de; margin-bottom: 12px; font-size: 22px; }
+    .modal-content p { font-size: 17px; color: #333; line-height: 1.4; margin-bottom: 15px; }
+    .action-btn { padding: 10px 25px; background: #ff9f43; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 17px; font-weight: bold; }
+    .close-btn { padding: 6px 18px; background: #ccc; border: none; border-radius: 5px; cursor: pointer; font-size: 15px; margin-top: 8px;}
+
+    .friends-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px; max-height: 250px; overflow-y: auto; }
+    .friend-card-btn {
+      padding: 12px; background: #f1f2f6; border: 2px solid #74b9ff; border-radius: 12px;
+      cursor: pointer; font-size: 16px; color: #2d3436; text-align: left; transition: 0.2s;
+    }
+    .friend-card-btn:hover { background: #74b9ff; color: white; }
+  </style>
+</head>
+<body>
+
+  <!-- 대문 (로그인) -->
+  <div id="login-screen">
+    <div class="login-box">
+      <h2>🌏 우리 반 공감월드</h2>
+      <p style="margin-top:10px; color:#666;">내 이름을 입력하고 나만의 공감월드로 들어가자!</p>
+      <input type="text" id="login-name" placeholder="예: 변승현">
+      <br>
+      <button onclick="login()">공감월드 입장하기 🚀</button>
+      <div class="sync-status">📡 실시간 멀티기기 파도타기 연동 중</div>
+    </div>
+  </div>
+
+  <!-- 메인 다이어리 -->
+  <div class="cyworld-wrapper" id="cyworld-app">
+    <div class="diary-container">
+      
+      <!-- 좌측 프로필 -->
+      <div class="left-pane">
+        <div class="visit-count">TODAY <span id="today-cnt">0</span> | TOTAL <span id="total-cnt">1</span></div>
+        <div class="profile-card">
+          <select class="today-is" id="today-mood" onchange="updateProfile()">
+            <option value="☀️ 기쁨">TODAY IS... ☀️ 기쁨</option>
+            <option value="☁️ 우울함">TODAY IS... ☁️ 우울함</option>
+            <option value="😡 화남">TODAY IS... 😡 화남</option>
+            <option value="🥺 외로움">TODAY IS... 🥺 외로움</option>
+            <option value="💖 행복함">TODAY IS... 💖 행복함</option>
+          </select>
+          
+          <div class="acorn-wallet">
+            🌰 내 도토리: <b id="acorn-count">0</b>개
+          </div>
+
+          <!-- 상반신 캐릭터 레이어 -->
+          <div class="avatar-upper-box" id="profile-avatar-box">
+            <div class="avatar-layer layer-accessory" id="layer-accessory"></div>
+            <div class="avatar-layer layer-animal-head" id="layer-animal">🐰</div>
+            <div class="avatar-layer layer-clothes" id="layer-clothes">👕</div>
+          </div>
+
+          <div class="intro-text">
+            <div id="name-crown" style="display:none; font-size:22px; line-height:1; margin-bottom:-2px;">👑</div>
+            <span id="profile-name" class="my-name">이름</span>의<br>공감월드에 오신 것을 환영해요! ◡̈
+          </div>
+
+          <div class="visitor-log-box">
+            <div class="visitor-log-title">🐾 최근 다녀간 친구</div>
+            <div class="visitor-list" id="visitor-list">
+              <span style="color:#aaa;">아직 방문자가 없어요</span>
+            </div>
+          </div>
+
+          <div class="bgm-box">
+            <span>🎵 공감 BGM (<span id="bgm-status-text">정지</span>)</span>
+            <div class="bgm-controls">
+              <button class="bgm-btn" onclick="toggleBgm()">▶ / ❚❚ 재생/정지</button>
+              <button class="bgm-btn" onclick="nextBgm()">⏭️ 다음곡</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 다이어리 스프링 -->
+      <div class="diary-spine">
+        <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+        <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+        <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+      </div>
+
+      <!-- 우측 메인 -->
+      <div class="right-pane">
+        <div class="right-header">
+          <div class="hompy-title">
+            <span id="world-title">힐링 공감월드</span>
+            <span class="edit-btn" id="edit-title-btn" onclick="editWorldTitle()">✏️</span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button id="btn-go-myhome" class="friends-visit-btn" onclick="visitFriend(myLoginUser)" style="display:none; background:#10ac84;">🏠 내 홈피로</button>
+            <button class="friends-visit-btn" onclick="openFriendsModal()">👥 우리 반 친구들 파도타기</button>
+          </div>
+        </div>
+
+        <div class="content-box">
+          <!-- 탭 1: 홈 (공감 나무) -->
+          <div id="page-home" class="page active">
+            <div class="tree-graphic" id="tree-container"></div>
+            <div class="what-friends-say" id="friends-say"></div>
+          </div>
+
+          <!-- 탭 2: 꾸미기 -->
+          <div id="page-deco" class="page">
+            <div class="deco-section">
+              <div class="deco-title">🐾 동물 캐릭터 (7종)</div>
+              <div class="deco-grid" id="opt-animals"></div>
+            </div>
+            <div class="deco-section">
+              <div class="deco-title">👕 상의 옷 (5종)</div>
+              <div class="deco-grid" id="opt-clothes"></div>
+            </div>
+            <div class="deco-section">
+              <div class="deco-title">🎀 악세사리 상점 (도토리로 구매)</div>
+              <div class="deco-grid" id="opt-accessories"></div>
+            </div>
+            <div class="deco-section">
+              <div class="deco-title">🎨 공간 배경색</div>
+              <div class="bg-horizontal-list" id="opt-bg"></div>
+            </div>
+          </div>
+
+          <!-- 탭 3: 공감 편지 -->
+          <div id="page-letter" class="page">
+            <div class="form-container">
+              <h3 style="color:#2e86de; margin-bottom:6px;">🍊 친구에게 공감 편지 보내기</h3>
+              <p style="font-size:13px; color:#e67e22; margin-bottom:12px;">친구의 미니홈피 나무에 맛있는 <b>공감 (🍊) 열매</b>가 열려요!</p>
+              <input type="text" id="letter-to" class="form-input" placeholder="받는 친구 이름 (예: 변승현)">
+              <textarea id="letter-msg" class="form-input" placeholder="친구의 기분이나 상황에 공감하며, 따뜻한 위로와 응원의 말을 적어주세요."></textarea>
+              <button class="submit-btn" onclick="sendLetter()">공감 열매 달아주기 🍊</button>
+            </div>
+          </div>
+
+          <!-- 탭 4: 공감 일기 -->
+          <div id="page-diary" class="page">
+            <div class="form-container">
+              <h3 style="color:#2e86de; margin-bottom:6px;">📖 나만의 공감 일기장</h3>
+              <p style="font-size:13px; color:#10ac84; margin-bottom:12px;">내가 누군가에게 공감해 주었거나, 공감받았던 경험을 남기면 <b>도토리 🌰 1개</b>를 얻어요!</p>
+              <textarea id="my-diary-msg" class="form-input" placeholder="오늘 내가 누군가의 마음에 공감해주었거나, 친구에게 마음 깊이 공감받았던 따뜻한 순간을 기록해보세요."></textarea>
+              <button class="submit-btn" style="background:#10ac84;" onclick="saveMyDiary()">일기 적고 도토리 받기 🌰</button>
+              
+              <div style="margin-top:20px; font-weight:bold; color:#555;">📜 내가 적은 공감 일기</div>
+              <div class="diary-card-list" id="my-diary-list"></div>
+            </div>
+          </div>
+
+          <!-- 탭 5: 공감 튜토리얼 (단계별 모션) -->
+          <div id="page-practice" class="page">
+            <div class="step-badge" id="step-badge">1단계: 슬픈 토끼 달래기</div>
+            <div id="webcam-container">
+              <video id="webcam" autoplay playsinline></video>
+              <canvas id="canvas"></canvas>
+              <div id="animal-overlay">😢🐰</div>
+            </div>
+            <div class="mission-text" id="mission-text">손을 좌우로 흔들어 토끼를 쓰다듬어 주세요!</div>
+          </div>
+
+          <!-- 방명록/편지 읽기 모달 -->
+          <div class="modal" id="msg-modal">
+            <div class="modal-content">
+              <h3 id="modal-from">To. 변승현</h3>
+              <p id="modal-text">"오늘 너무 잘했어!"</p>
+              
+              <div style="margin-top:20px; display:flex; justify-content:center; gap:10px;">
+                <!-- 편지 삭제 버튼 (본인 홈피에서만 노출) -->
+                <button class="action-btn" id="btn-delete-fruit" style="background:#e74c3c; display:none;">🗑️ 삭제</button>
+                <button class="close-btn" style="margin-top:0;" onclick="closeModal()">닫기</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 튜토리얼 단계 성공 모달 -->
+          <div class="modal" id="step-success-modal">
+            <div class="modal-content">
+              <h3 id="step-success-title">🎊 1단계 성공!</h3>
+              <p id="step-success-msg">토끼의 마음이 따뜻해졌어요!</p>
+              <button class="action-btn" id="step-next-btn" onclick="nextTutorialStep()">다음 단계로 넘어가기 ➔</button>
+            </div>
+          </div>
+
+          <!-- 친구 목록 (파도타기) 모달 -->
+          <div class="modal" id="friends-modal">
+            <div class="modal-content">
+              <h3>👥 우리 반 공감월드 파도타기</h3>
+              <p>놀러가고 싶은 친구의 공감월드를 클릭해보세요!</p>
+              <div class="friends-grid" id="friends-list-container"></div>
+              <button class="close-btn" onclick="closeFriendsModal()">닫기</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 우측 세로 탭 5개 -->
+      <div class="tab-menu">
+        <button class="tab-btn active" onclick="switchTab('home', this)">홈</button>
+        <button class="tab-btn" onclick="switchTab('deco', this)">꾸미기</button>
+        <button class="tab-btn" onclick="switchTab('letter', this)">공감편지</button>
+        <button class="tab-btn" onclick="switchTab('diary', this)">공감일기</button>
+        <button class="tab-btn" onclick="switchTab('practice', this)">공감연습</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       [기본 사용자 데이터 세팅 v3] - 25명 명단 적용 (이전 데이터 무시 및 초기화)
+       ========================================================================== */
+    // 기존 캐시를 피하기 위해 v3 키를 사용합니다.
+    let usersData = JSON.parse(localStorage.getItem('cy_users_v3')) || {};
+    let lettersData = JSON.parse(localStorage.getItem('cy_letters_v3')) || [];
+    let visitorsData = JSON.parse(localStorage.getItem('cy_visitors_v3')) || {};
+
+    const allDefaultUsers = [
+      '변승현', '차익호', '황유진', '이재일', '임연수', 
+      '김원지', '이정수', '양영택', '이효선', '박현진', 
+      '김지예', '송문현', '황현철', '송조영', '이지민', 
+      '황지민', '최예림', '정서윤', '박소현', '조기쁨', 
+      '곽소연', '김나경', '조성화', '최진혁', '천애련'
+    ];
+    
+    let isDataUpdated = false;
+
+    // 명단에 있는 이름 초기화 (가짜 편지 등 삭제)
+    allDefaultUsers.forEach(name => {
+      if (!usersData[name]) {
+        usersData[name] = {
+          animal: '🐰', clothes: '👕', accessory: 'none', bg: '#ffeaa7',
+          mood: '☀️ 기쁨', title: `${name}의 공감월드`, crown: false,
+          acorns: 0, inventory: ['none'], myDiaries: []
+        };
+        isDataUpdated = true;
+      }
+    });
+
+    if (isDataUpdated) {
+      localStorage.setItem('cy_users_v3', JSON.stringify(usersData));
+    }
+
+    /* ==========================================================================
+       1. Web Audio API
+       ========================================================================== */
+    let audioCtx = null;
+
+    function getAudioContext() {
+      if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+      return audioCtx;
+    }
+
+    function playPopSound() {
+      try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.08);
+      } catch(e){}
+    }
+
+    function playFanfareSound() {
+      try {
+        const ctx = getAudioContext();
+        const notes = [523.25, 659.25, 783.99, 1046.50]; 
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.1);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime + idx * 0.1);
+          gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + idx * 0.1 + 0.3);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + idx * 0.1);
+          osc.stop(ctx.currentTime + idx * 0.1 + 0.3);
+        });
+      } catch(e){}
+    }
+
+    let bgmInterval = null;
+    let isBgmPlaying = false;
+    let currentBgmTrack = 0;
+    const bgmTracks = [
+      { name: "🎹 잔잔한 피아노", notes: [261.63, 329.63, 392.00, 523.25, 392.00, 329.63] },
+      { name: "☀️ 따뜻한 햇살", notes: [349.23, 440.00, 523.25, 659.25, 523.25, 440.00] },
+      { name: "🍃 숲속의 휴식", notes: [293.66, 369.99, 440.00, 587.33, 440.00, 369.99] }
+    ];
+
+    function toggleBgm() {
+      const ctx = getAudioContext();
+      if(isBgmPlaying) {
+        clearInterval(bgmInterval);
+        isBgmPlaying = false;
+        document.getElementById('bgm-status-text').innerText = "정지";
+      } else {
+        isBgmPlaying = true;
+        document.getElementById('bgm-status-text').innerText = bgmTracks[currentBgmTrack].name;
+        let idx = 0;
+        bgmInterval = setInterval(() => {
+          try {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = bgmTracks[currentBgmTrack].notes[idx];
+            gain.gain.setValueAtTime(0.03, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(); osc.stop(ctx.currentTime + 0.8);
+            idx = (idx + 1) % bgmTracks[currentBgmTrack].notes.length;
+          } catch(e){}
+        }, 800);
+      }
+    }
+
+    function nextBgm() {
+      currentBgmTrack = (currentBgmTrack + 1) % bgmTracks.length;
+      document.getElementById('bgm-status-text').innerText = bgmTracks[currentBgmTrack].name;
+      if(isBgmPlaying) { clearInterval(bgmInterval); isBgmPlaying = false; toggleBgm(); }
+    }
+
+    /* ==========================================================================
+       2. Firebase 실시간 DB 연동 (v3 키 사용)
+       ========================================================================== */
+    const firebaseConfig = { databaseURL: "https://empathy-minihompy-default-rtdb.firebaseio.com" };
+    let db = null;
+    try { firebase.initializeApp(firebaseConfig); db = firebase.database(); } catch(e){}
+
+    let myLoginUser = "";      
+    let currentViewingUser = ""; 
+
+    if (db) {
+      db.ref('users_v3').on('value', (s) => { 
+        if(s.val()){ 
+          usersData = s.val(); 
+          localStorage.setItem('cy_users_v3', JSON.stringify(usersData));
+          if(currentViewingUser) renderHompyUI(); 
+        } 
+      });
+      db.ref('letters_v3').on('value', (s) => { 
+        if(s.val()){ 
+          lettersData = Object.values(s.val()); 
+          localStorage.setItem('cy_letters_v3', JSON.stringify(lettersData));
+          if(currentViewingUser) renderHome(); 
+        } 
+      });
+      db.ref('visitors_v3').on('value', (s) => {
+        if(s.val()){
+          visitorsData = s.val();
+          localStorage.setItem('cy_visitors_v3', JSON.stringify(visitorsData));
+          if(currentViewingUser) renderVisitors();
+        }
+      });
+    }
+
+    /* ==========================================================================
+       3. 메인 앱 로직
+       ========================================================================== */
+    const presetAnimals = ['🐰','🐻','🐶','🐱','🦊','🐯','🐼'];
+    const presetClothes = ['👕','👔','🎽','🧥','👚']; 
+    const presetAccessories = [
+      { id: 'none', item: '❌없음', price: 0 },
+      { id: 'ribbon', item: '🎀리본', price: 2 },
+      { id: 'hat', item: '🎩신사모자', price: 3 },
+      { id: 'glasses', item: '👓안경', price: 2 },
+      { id: 'pin', item: '🐥새싹핀', price: 1 },
+      { id: 'flower', item: '🌺꽃핀', price: 2 }
+    ];
+    const presetBg = ['#ffeaa7','#81ecec','#fab1a0','#55efc4','#fd79a8','#a29bfe'];
+
+    function login() {
+      const nameInput = document.getElementById('login-name');
+      const name = nameInput.value.trim();
+      if(!name) return alert("이름을 입력해주세요!");
+      
+      myLoginUser = name;
+      currentViewingUser = name;
+      
+      if(!usersData[name]) {
+        usersData[name] = { 
+          animal: '🐰', clothes: '👕', accessory: 'none', bg: '#ffeaa7', 
+          mood: '☀️ 기쁨', title: `${name}의 공감월드`, crown: false,
+          acorns: 0, inventory: ['none'], myDiaries: []
+        };
+        saveUsers();
+      }
+      
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('cyworld-app').style.display = 'block';
+      
+      renderHompyUI();
+      recordVisit(currentViewingUser, myLoginUser);
+    }
+
+    function renderHompyUI() {
+      const u = usersData[currentViewingUser] || { 
+        animal: '🐰', clothes: '👕', accessory: 'none', bg: '#ffeaa7', 
+        mood: '☀️ 기쁨', title: `${currentViewingUser}의 공감월드`, crown: false,
+        acorns: 0, inventory: ['none'], myDiaries: []
+      };
+
+      document.getElementById('profile-name').innerText = currentViewingUser;
+      document.getElementById('world-title').innerText = u.title || `${currentViewingUser}의 공감월드`;
+      document.getElementById('today-mood').value = u.mood || '☀️ 기쁨';
+      document.getElementById('acorn-count').innerText = u.acorns || 0;
+      
+      document.getElementById('layer-animal').innerText = u.animal || '🐰';
+      document.getElementById('layer-clothes').innerText = u.clothes || '👕';
+      
+      let accEmoji = '';
+      if(u.accessory && u.accessory !== 'none') {
+        const found = presetAccessories.find(a => a.id === u.accessory);
+        if(found) accEmoji = found.item.replace(/[가-힣❌]/g, '');
+      }
+      document.getElementById('layer-accessory').innerText = accEmoji;
+      
+      document.getElementById('profile-avatar-box').style.background = u.bg || '#ffeaa7';
+      document.getElementById('page-home').style.background = u.bg || '#ffeaa7';
+      
+      // 왕관은 이름 위에 표시되도록 토글
+      document.getElementById('name-crown').style.display = u.crown ? 'inline-block' : 'none';
+
+      if(currentViewingUser !== myLoginUser) {
+        document.getElementById('edit-title-btn').style.display = 'none';
+        document.getElementById('today-mood').disabled = true;
+        document.getElementById('btn-go-myhome').style.display = 'inline-block';
+      } else {
+        document.getElementById('edit-title-btn').style.display = 'inline';
+        document.getElementById('today-mood').disabled = false;
+        document.getElementById('btn-go-myhome').style.display = 'none';
+      }
+
+      renderVisitors();
+      renderHome();
+      renderMyDiaries();
+      initDecoOptions();
+    }
+
+    function recordVisit(hostUser, visitorUser) {
+      if (hostUser === visitorUser) return;
+      if(!visitorsData[hostUser]) visitorsData[hostUser] = [];
+      let list = visitorsData[hostUser];
+      
+      list = list.filter(name => name !== visitorUser);
+      list.unshift(visitorUser);
+      if(list.length > 5) list = list.slice(0, 5); 
+      
+      visitorsData[hostUser] = list;
+      saveVisitors();
+    }
+
+    function renderVisitors() {
+      const list = visitorsData[currentViewingUser] || [];
+      const box = document.getElementById('visitor-list');
+      box.innerHTML = '';
+      if(list.length === 0) {
+        box.innerHTML = '<span style="color:#aaa;">아직 방문자가 없어요</span>';
+      } else {
+        list.forEach(v => { box.innerHTML += `<span class="visitor-tag">🐾 ${v}</span>`; });
+      }
+    }
+
+    function editWorldTitle() {
+      const newTitle = prompt("새로운 공감월드 제목을 입력해 주세요:", document.getElementById('world-title').innerText);
+      if(newTitle) {
+        usersData[myLoginUser].title = newTitle;
+        saveUsers();
+        renderHompyUI();
+      }
+    }
+
+    function saveUsers() { 
+      localStorage.setItem('cy_users_v3', JSON.stringify(usersData)); 
+      if(db) db.ref('users_v3').set(usersData); 
+    }
+    function saveLetters() { 
+      localStorage.setItem('cy_letters_v3', JSON.stringify(lettersData)); 
+      if(db) db.ref('letters_v3').set(lettersData); 
+    }
+    function saveVisitors() {
+      localStorage.setItem('cy_visitors_v3', JSON.stringify(visitorsData));
+      if(db) db.ref('visitors_v3').set(visitorsData);
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('page-' + tabId).classList.add('active');
+
+      if (tabId === 'practice') startTutorial();
+      else { stopCamera(); if(tabId === 'home') renderHome(); }
+    }
+
+    function renderHome() {
+      const tree = document.getElementById('tree-container');
+      const friendsSay = document.getElementById('friends-say');
+      tree.innerHTML = ''; friendsSay.innerHTML = '';
+      
+      const myLetters = lettersData.filter(m => m.to === currentViewingUser);
+      document.getElementById('today-cnt').innerText = myLetters.length;
+      document.getElementById('total-cnt').innerText = myLetters.length * 3 + 1;
+      
+      myLetters.forEach((letData, idx) => {
+        const fruit = document.createElement('div');
+        fruit.className = 'fruit';
+        fruit.innerHTML = `🍊<span>${letData.from}</span>`;
+        
+        const angle = (idx * 137.5) * (Math.PI / 180); 
+        const radius = 20 + ((idx * 15) % 110); 
+        
+        fruit.style.left = `calc(50% + ${Math.cos(angle) * radius}px - 20px)`;
+        fruit.style.bottom = `calc(210px + ${Math.sin(angle) * radius}px)`;
+        
+        fruit.onclick = () => showMsgModal(letData);
+        tree.appendChild(fruit);
+        friendsSay.innerHTML += `▶ <b>${letData.from}:</b> ${letData.msg} <br>`;
+      });
+      if(myLetters.length === 0) friendsSay.innerHTML = "<span style='color:#999;'>나무에 공감 (🍊) 열매가 없어요. 편지를 주고받아보세요!</span>";
+    }
+
+    function initDecoOptions() {
+      const aBox = document.getElementById('opt-animals');
+      const cBox = document.getElementById('opt-clothes');
+      const accBox = document.getElementById('opt-accessories');
+      const bgBox = document.getElementById('opt-bg');
+
+      aBox.innerHTML = presetAnimals.map(a => `<button class="opt-btn" onclick="setDeco('animal','${a}')">${a}</button>`).join('');
+      cBox.innerHTML = presetClothes.map(c => `<button class="opt-btn" onclick="setDeco('clothes','${c}')">${c}</button>`).join('');
+      
+      const me = usersData[myLoginUser] || { inventory: ['none'], acorns: 0 };
+      accBox.innerHTML = presetAccessories.map(acc => {
+        const isOwned = (me.inventory || ['none']).includes(acc.id);
+        const priceText = isOwned ? '보유중' : `🌰 ${acc.price}개`;
+        return `
+          <button class="opt-btn" onclick="buyOrEquipAccessory('${acc.id}', ${acc.price})">
+            ${acc.item}
+            <span class="price-tag">${priceText}</span>
+          </button>
+        `;
+      }).join('');
+
+      bgBox.innerHTML = presetBg.map(b => `<div class="bg-opt-item" style="background:${b};" onclick="setDeco('bg','${b}')"></div>`).join('');
+    }
+
+    function buyOrEquipAccessory(accId, price) {
+      if(currentViewingUser !== myLoginUser) return alert("내 공감월드만 꾸밀 수 있어요!");
+      const me = usersData[myLoginUser];
+      if(!me.inventory) me.inventory = ['none'];
+
+      if(me.inventory.includes(accId)) {
+        me.accessory = accId;
+        saveUsers();
+        renderHompyUI();
+        playPopSound();
+      } else {
+        if((me.acorns || 0) >= price) {
+          me.acorns -= price;
+          me.inventory.push(accId);
+          me.accessory = accId;
+          saveUsers();
+          renderHompyUI();
+          playFanfareSound();
+          alert("악세사리를 구매하여 착용했습니다! ✨");
+        } else {
+          alert(`도토리가 부족해요! (필요: ${price}개 / 보유: ${me.acorns || 0}개)\n공감 일기를 작성해서 도토리를 모아보세요!`);
+        }
+      }
+    }
+
+    function setDeco(type, val) {
+      if(currentViewingUser !== myLoginUser) return alert("내 공감월드만 꾸밀 수 있어요!");
+      usersData[myLoginUser][type] = val;
+      saveUsers();
+      renderHompyUI();
+    }
+
+    function updateProfile() {
+      if(currentViewingUser !== myLoginUser) return;
+      usersData[myLoginUser].mood = document.getElementById('today-mood').value;
+      saveUsers();
+    }
+
+    function sendLetter() {
+      const to = document.getElementById('letter-to').value.trim();
+      const msg = document.getElementById('letter-msg').value.trim();
+      if(!to || !msg) return alert("받는 친구와 편지 내용을 적어주세요!");
+      
+      if(!usersData[to]) {
+        alert("명단에 없는 이름이거나, 아직 가입하지 않은 친구예요!");
+        return;
+      }
+      
+      lettersData.push({ to, from: myLoginUser, msg, time: new Date().getTime() });
+      saveLetters();
+      
+      playFanfareSound();
+      alert(`${to}의 공감 나무에 '공감 (🍊)' 열매를 달아주었습니다!`);
+      
+      document.getElementById('letter-to').value = '';
+      document.getElementById('letter-msg').value = '';
+      
+      visitFriend(to);
+      switchTab('home', document.querySelectorAll('.tab-btn')[0]);
+    }
+
+    function saveMyDiary() {
+      const msg = document.getElementById('my-diary-msg').value.trim();
+      if(!msg) return alert("공감했던 일화나 경험을 작성해주세요!");
+      
+      const me = usersData[myLoginUser];
+      if(!me.myDiaries) me.myDiaries = [];
+      
+      const newEntry = {
+        date: new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        msg: msg
+      };
+      
+      me.myDiaries.unshift(newEntry);
+      me.acorns = (me.acorns || 0) + 1;
+      saveUsers();
+      
+      playFanfareSound();
+      alert("공감 일기가 저장되었습니다!\n보상으로 도토리 🌰 1개를 획득하셨습니다!");
+      
+      document.getElementById('my-diary-msg').value = '';
+      renderHompyUI();
+    }
+
+    function renderMyDiaries() {
+      const me = usersData[currentViewingUser];
+      const box = document.getElementById('my-diary-list');
+      if(!box) return;
+      box.innerHTML = '';
+      
+      const diaries = me?.myDiaries || [];
+      if(diaries.length === 0) {
+        box.innerHTML = '<div style="font-size:13px; color:#aaa;">아직 작성한 공감 일기가 없어요.</div>';
+      } else {
+        diaries.forEach(d => {
+          box.innerHTML += `
+            <div class="diary-card">
+              <div class="date">📅 ${d.date}</div>
+              <div>${d.msg}</div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    // 모달 및 열매 삭제 기능
+    function showMsgModal(m) {
+      document.getElementById('modal-from').innerText = `To. ${m.to} (From. ${m.from})`;
+      document.getElementById('modal-text').innerText = `"${m.msg}"`;
+      
+      const deleteBtn = document.getElementById('btn-delete-fruit');
+      // 내 미니홈피일 때만 삭제 버튼 활성화
+      if (currentViewingUser === myLoginUser) {
+        deleteBtn.style.display = 'inline-block';
+        deleteBtn.onclick = () => deleteFruit(m.time);
+      } else {
+        deleteBtn.style.display = 'none';
+      }
+      
+      document.getElementById('msg-modal').style.display = 'flex';
+    }
+
+    function closeModal() { document.getElementById('msg-modal').style.display = 'none'; }
+
+    function deleteFruit(timeId) {
+      if(!confirm("정말 이 공감 열매를 삭제할까요?")) return;
+      lettersData = lettersData.filter(l => l.time !== timeId);
+      saveLetters();
+      closeModal();
+      renderHome();
+    }
+
+    function openFriendsModal() {
+      const container = document.getElementById('friends-list-container');
+      container.innerHTML = '';
+      
+      const allUsers = Object.keys(usersData);
+      allUsers.forEach(uName => {
+        const isMe = uName === myLoginUser ? " (나)" : "";
+        container.innerHTML += `
+          <button class="friend-card-btn" onclick="visitFriend('${uName}')">
+            🏠 <b>${uName}${isMe}</b>의 월드<br>
+            <small style="color:#777;">${usersData[uName].mood || '☀️ 기쁨'}</small>
+          </button>
+        `;
+      });
+      document.getElementById('friends-modal').style.display = 'flex';
+    }
+
+    function visitFriend(targetName) {
+      currentViewingUser = targetName;
+      closeFriendsModal();
+      renderHompyUI();
+      recordVisit(currentViewingUser, myLoginUser); 
+    }
+    function closeFriendsModal() { document.getElementById('friends-modal').style.display = 'none'; }
+
+    /* ==========================================================================
+       4. 모션 튜토리얼 (Hands & FaceMesh)
+       ========================================================================== */
+    let currentStep = 1;
+    let moveCount = 0;
+    let prevX = null, prevY = null;
+    let camera = null, isPracticeActive = false;
+    let isStepCleared = false;
+
+    function startTutorial() {
+      currentStep = 1;
+      setupStep();
+      startCamera();
+    }
+
+    function setupStep() {
+      moveCount = 0;
+      prevX = null;
+      prevY = null;
+      isStepCleared = false;
+      const badge = document.getElementById('step-badge');
+      const overlay = document.getElementById('animal-overlay');
+      const txt = document.getElementById('mission-text');
+
+      if(currentStep === 1) {
+        badge.innerText = "1단계: 슬픈 토끼 달래기";
+        overlay.innerText = "😢🐰";
+        txt.innerText = "손을 좌우로 크게 흔들어 토끼를 쓰다듬어 주세요!";
+      } else if(currentStep === 2) {
+        badge.innerText = "2단계: 화난 곰 식혀주기";
+        overlay.innerText = "😡🐻";
+        txt.innerText = "손을 빠르게 좌우로 부채질해 곰의 화를 식혀주세요!";
+      } else if(currentStep === 3) {
+        badge.innerText = "3단계: 외로운 강아지 다독이기";
+        overlay.innerText = "🥺🐶";
+        txt.innerText = "카메라를 보며 고개를 위아래로 끄덕끄덕해주세요!";
+      }
+    }
+
+    function handleStepSuccess() {
+      isStepCleared = true;
+      playFanfareSound();
+
+      const modalTitle = document.getElementById('step-success-title');
+      const modalMsg = document.getElementById('step-success-msg');
+      const nextBtn = document.getElementById('step-next-btn');
+
+      if(currentStep === 1) {
+        modalTitle.innerText = "🎊 1단계 성공!";
+        modalMsg.innerText = "토끼의 마음이 따뜻해졌어요! 상처받은 마음을 잘 다독여주었네요.";
+        nextBtn.innerText = "2단계 도전하기 ➔";
+      } else if(currentStep === 2) {
+        modalTitle.innerText = "🔥 2단계 성공!";
+        modalMsg.innerText = "곰의 화가 시원하게 가라앉았어요! 감정을 잘 다스려주었어요.";
+        nextBtn.innerText = "마지막 3단계 도전하기 ➔";
+      } else if(currentStep === 3) {
+        modalTitle.innerText = "👑 공감 마스터 달성!";
+        modalMsg.innerText = "축하합니다! 고개를 끄덕이며 깊이 공감해주어 '공감 왕관 👑'을 획득하셨습니다!";
+        nextBtn.innerText = "내 미니홈피로 돌아가기 🏠";
+        
+        usersData[myLoginUser].crown = true;
+        saveUsers();
+      }
+      document.getElementById('step-success-modal').style.display = 'flex';
+    }
+
+    function nextTutorialStep() {
+      document.getElementById('step-success-modal').style.display = 'none';
+      if(currentStep < 3) {
+        currentStep++;
+        setupStep();
+      } else {
+        visitFriend(myLoginUser);
+        switchTab('home', document.querySelectorAll('.tab-btn')[0]);
+      }
+    }
+
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    
+    // Hands 모델 (1, 2단계용)
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    hands.onResults(onHandResults);
+
+    // FaceMesh 모델 (3단계 고개 끄덕임용)
+    const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    faceMesh.onResults(onFaceResults);
+
+    function startCamera() {
+      isPracticeActive = true;
+      if(!camera) {
+        camera = new Camera(videoElement, {
+          onFrame: async () => { 
+            if(isPracticeActive) {
+              if (currentStep === 1 || currentStep === 2) {
+                await hands.send({image: videoElement}); 
+              } else if (currentStep === 3) {
+                await faceMesh.send({image: videoElement});
+              }
+            }
+          },
+          width: 320, height: 240
+        });
+      }
+      camera.start();
+    }
+    function stopCamera() { isPracticeActive = false; if(camera) { camera.stop(); camera = null; } }
+
+    function onHandResults(results) {
+      if (!isPracticeActive || isStepCleared || currentStep === 3) return;
+      
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        for(let i=0; i<landmarks.length; i++) {
+          const x = landmarks[i].x * canvasElement.width;
+          const y = landmarks[i].y * canvasElement.height;
+          canvasCtx.beginPath(); canvasCtx.arc(x, y, 4, 0, 2*Math.PI);
+          canvasCtx.fillStyle = '#ff7675'; canvasCtx.fill();
+        }
+        
+        const x = landmarks[0].x;
+        if (prevX !== null) {
+          if (currentStep === 1 || currentStep === 2) {
+            if (Math.abs(x - prevX) > 0.04) {
+              moveCount++;
+              playPopSound();
+            }
+          }
+          const targetCount = currentStep === 2 ? 15 : 10;
+          if (moveCount >= targetCount) handleStepSuccess();
+        }
+        prevX = x;
+      }
+      canvasCtx.restore();
+    }
+
+    function onFaceResults(results) {
+      if (!isPracticeActive || isStepCleared || currentStep !== 3) return;
+      
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        const landmarks = results.multiFaceLandmarks[0];
+        const noseTip = landmarks[1]; // 코끝 랜드마크 인덱스
+
+        const x = noseTip.x * canvasElement.width;
+        const y = noseTip.y * canvasElement.height;
+        canvasCtx.beginPath(); canvasCtx.arc(x, y, 6, 0, 2*Math.PI);
+        canvasCtx.fillStyle = '#ffeaa7'; canvasCtx.fill();
+        
+        if (prevY !== null) {
+          // 고개를 위아래로 움직일 때 (y값 변화)
+          if (Math.abs(noseTip.y - prevY) > 0.025) { 
+            moveCount++;
+            playPopSound();
+          }
+          if (moveCount >= 10) handleStepSuccess();
+        }
+        prevY = noseTip.y;
+      }
+      canvasCtx.restore();
+    }
+
+    document.getElementById('login-name').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') login();
+    });
+  </script>
+</body>
+</html>
