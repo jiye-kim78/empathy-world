@@ -228,7 +228,7 @@
       
       <!-- 좌측 프로필 -->
       <div class="left-pane">
-        <div class="visit-count">TODAY <span id="today-cnt">0</span> | TOTAL <span id="total-cnt">1</span></div>
+        <div class="visit-count">TODAY <span id="today-cnt">0</span> | TOTAL <span id="total-cnt">0</span></div>
         <div class="profile-card">
           <select class="today-is" id="today-mood" onchange="updateProfile()">
             <option value="☀️ 기쁨">TODAY IS... ☀️ 기쁨</option>
@@ -360,7 +360,6 @@
               <p id="modal-text">"오늘 너무 잘했어!"</p>
               
               <div style="margin-top:20px; display:flex; justify-content:center; gap:10px;">
-                <!-- 편지 삭제 버튼 (본인 홈피에서만 노출) -->
                 <button class="action-btn" id="btn-delete-fruit" style="background:#e74c3c; display:none;">🗑️ 삭제</button>
                 <button class="close-btn" style="margin-top:0;" onclick="closeModal()">닫기</button>
               </div>
@@ -403,12 +402,11 @@
 
   <script>
     /* ==========================================================================
-       [기본 사용자 데이터 세팅 v3] - 25명 명단 적용 (이전 데이터 무시 및 초기화)
+       [기본 데이터 및 초기화 v4]
        ========================================================================== */
-    // 기존 캐시를 피하기 위해 v3 키를 사용합니다.
-    let usersData = JSON.parse(localStorage.getItem('cy_users_v3')) || {};
-    let lettersData = JSON.parse(localStorage.getItem('cy_letters_v3')) || [];
-    let visitorsData = JSON.parse(localStorage.getItem('cy_visitors_v3')) || {};
+    let usersData = JSON.parse(localStorage.getItem('cy_users_v4')) || {};
+    let lettersData = JSON.parse(localStorage.getItem('cy_letters_v4')) || [];
+    let visitorsData = JSON.parse(localStorage.getItem('cy_visitors_v4')) || {};
 
     const allDefaultUsers = [
       '변승현', '차익호', '황유진', '이재일', '임연수', 
@@ -420,7 +418,6 @@
     
     let isDataUpdated = false;
 
-    // 명단에 있는 이름 초기화 (가짜 편지 등 삭제)
     allDefaultUsers.forEach(name => {
       if (!usersData[name]) {
         usersData[name] = {
@@ -433,7 +430,7 @@
     });
 
     if (isDataUpdated) {
-      localStorage.setItem('cy_users_v3', JSON.stringify(usersData));
+      localStorage.setItem('cy_users_v4', JSON.stringify(usersData));
     }
 
     /* ==========================================================================
@@ -522,7 +519,7 @@
     }
 
     /* ==========================================================================
-       2. Firebase 실시간 DB 연동 (v3 키 사용)
+       2. Firebase 실시간 DB 연동
        ========================================================================== */
     const firebaseConfig = { databaseURL: "https://empathy-minihompy-default-rtdb.firebaseio.com" };
     let db = null;
@@ -532,24 +529,24 @@
     let currentViewingUser = ""; 
 
     if (db) {
-      db.ref('users_v3').on('value', (s) => { 
+      db.ref('users_v4').on('value', (s) => { 
         if(s.val()){ 
           usersData = s.val(); 
-          localStorage.setItem('cy_users_v3', JSON.stringify(usersData));
+          localStorage.setItem('cy_users_v4', JSON.stringify(usersData));
           if(currentViewingUser) renderHompyUI(); 
         } 
       });
-      db.ref('letters_v3').on('value', (s) => { 
+      db.ref('letters_v4').on('value', (s) => { 
         if(s.val()){ 
           lettersData = Object.values(s.val()); 
-          localStorage.setItem('cy_letters_v3', JSON.stringify(lettersData));
+          localStorage.setItem('cy_letters_v4', JSON.stringify(lettersData));
           if(currentViewingUser) renderHome(); 
         } 
       });
-      db.ref('visitors_v3').on('value', (s) => {
+      db.ref('visitors_v4').on('value', (s) => {
         if(s.val()){
           visitorsData = s.val();
-          localStorage.setItem('cy_visitors_v3', JSON.stringify(visitorsData));
+          localStorage.setItem('cy_visitors_v4', JSON.stringify(visitorsData));
           if(currentViewingUser) renderVisitors();
         }
       });
@@ -619,7 +616,6 @@
       document.getElementById('profile-avatar-box').style.background = u.bg || '#ffeaa7';
       document.getElementById('page-home').style.background = u.bg || '#ffeaa7';
       
-      // 왕관은 이름 위에 표시되도록 토글
       document.getElementById('name-crown').style.display = u.crown ? 'inline-block' : 'none';
 
       if(currentViewingUser !== myLoginUser) {
@@ -638,27 +634,52 @@
       initDecoOptions();
     }
 
+    /* 방문자 수 (TODAY / TOTAL) 및 최근 방문자 기록 로직 */
     function recordVisit(hostUser, visitorUser) {
-      if (hostUser === visitorUser) return;
-      if(!visitorsData[hostUser]) visitorsData[hostUser] = [];
-      let list = visitorsData[hostUser];
+      if (hostUser === visitorUser) return; // 본인 방문 시 집계 제외
+
+      if(!visitorsData[hostUser]) {
+        visitorsData[hostUser] = { recent: [], logs: [] };
+      }
       
-      list = list.filter(name => name !== visitorUser);
-      list.unshift(visitorUser);
-      if(list.length > 5) list = list.slice(0, 5); 
+      let hostData = visitorsData[hostUser];
+      if(!hostData.logs) hostData.logs = [];
+      if(!hostData.recent) hostData.recent = [];
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      // 방문 로그 추가 (시간, 방문자, 날짜)
+      hostData.logs.push({ visitor: visitorUser, date: todayStr, time: new Date().getTime() });
+
+      // 최근 다녀간 친구 태그 업데이트
+      hostData.recent = hostData.recent.filter(name => name !== visitorUser);
+      hostData.recent.unshift(visitorUser);
+      if(hostData.recent.length > 5) hostData.recent = hostData.recent.slice(0, 5); 
       
-      visitorsData[hostUser] = list;
+      visitorsData[hostUser] = hostData;
       saveVisitors();
     }
 
     function renderVisitors() {
-      const list = visitorsData[currentViewingUser] || [];
+      const hostData = visitorsData[currentViewingUser] || { recent: [], logs: [] };
+      const logs = hostData.logs || [];
+      const recent = hostData.recent || [];
+
+      // TODAY: 오늘 접속한 중복 없는 방문자 수
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayVisitors = new Set(logs.filter(l => l.date === todayStr).map(l => l.visitor));
+      document.getElementById('today-cnt').innerText = todayVisitors.size;
+
+      // TOTAL: 총 누적 방문 횟수
+      document.getElementById('total-cnt').innerText = logs.length;
+
+      // 최근 방문자 태그 표시
       const box = document.getElementById('visitor-list');
       box.innerHTML = '';
-      if(list.length === 0) {
+      if(recent.length === 0) {
         box.innerHTML = '<span style="color:#aaa;">아직 방문자가 없어요</span>';
       } else {
-        list.forEach(v => { box.innerHTML += `<span class="visitor-tag">🐾 ${v}</span>`; });
+        recent.forEach(v => { box.innerHTML += `<span class="visitor-tag">🐾 ${v}</span>`; });
       }
     }
 
@@ -672,16 +693,16 @@
     }
 
     function saveUsers() { 
-      localStorage.setItem('cy_users_v3', JSON.stringify(usersData)); 
-      if(db) db.ref('users_v3').set(usersData); 
+      localStorage.setItem('cy_users_v4', JSON.stringify(usersData)); 
+      if(db) db.ref('users_v4').set(usersData); 
     }
     function saveLetters() { 
-      localStorage.setItem('cy_letters_v3', JSON.stringify(lettersData)); 
-      if(db) db.ref('letters_v3').set(lettersData); 
+      localStorage.setItem('cy_letters_v4', JSON.stringify(lettersData)); 
+      if(db) db.ref('letters_v4').set(lettersData); 
     }
     function saveVisitors() {
-      localStorage.setItem('cy_visitors_v3', JSON.stringify(visitorsData));
-      if(db) db.ref('visitors_v3').set(visitorsData);
+      localStorage.setItem('cy_visitors_v4', JSON.stringify(visitorsData));
+      if(db) db.ref('visitors_v4').set(visitorsData);
     }
 
     function switchTab(tabId, btn) {
@@ -700,8 +721,6 @@
       tree.innerHTML = ''; friendsSay.innerHTML = '';
       
       const myLetters = lettersData.filter(m => m.to === currentViewingUser);
-      document.getElementById('today-cnt').innerText = myLetters.length;
-      document.getElementById('total-cnt').innerText = myLetters.length * 3 + 1;
       
       myLetters.forEach((letData, idx) => {
         const fruit = document.createElement('div');
@@ -850,13 +869,11 @@
       }
     }
 
-    // 모달 및 열매 삭제 기능
     function showMsgModal(m) {
       document.getElementById('modal-from').innerText = `To. ${m.to} (From. ${m.from})`;
       document.getElementById('modal-text').innerText = `"${m.msg}"`;
       
       const deleteBtn = document.getElementById('btn-delete-fruit');
-      // 내 미니홈피일 때만 삭제 버튼 활성화
       if (currentViewingUser === myLoginUser) {
         deleteBtn.style.display = 'inline-block';
         deleteBtn.onclick = () => deleteFruit(m.time);
@@ -983,12 +1000,10 @@
     const canvasElement = document.getElementById('canvas');
     const canvasCtx = canvasElement.getContext('2d');
     
-    // Hands 모델 (1, 2단계용)
     const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     hands.onResults(onHandResults);
 
-    // FaceMesh 모델 (3단계 고개 끄덕임용)
     const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
     faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     faceMesh.onResults(onFaceResults);
@@ -1056,7 +1071,7 @@
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const landmarks = results.multiFaceLandmarks[0];
-        const noseTip = landmarks[1]; // 코끝 랜드마크 인덱스
+        const noseTip = landmarks[1]; 
 
         const x = noseTip.x * canvasElement.width;
         const y = noseTip.y * canvasElement.height;
@@ -1064,7 +1079,6 @@
         canvasCtx.fillStyle = '#ffeaa7'; canvasCtx.fill();
         
         if (prevY !== null) {
-          // 고개를 위아래로 움직일 때 (y값 변화)
           if (Math.abs(noseTip.y - prevY) > 0.025) { 
             moveCount++;
             playPopSound();
