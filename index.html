@@ -519,9 +519,9 @@
     }
 
     /* ==========================================================================
-       2. Firebase 실시간 DB 연동
+       2. Firebase 실시간 DB 연동 (선생님 전용 DB 주소 완벽 적용)
        ========================================================================== */
-    const firebaseConfig = { databaseURL: "https://empathy-minihompy-default-rtdb.firebaseio.com" };
+    const firebaseConfig = { databaseURL: "https://empathy-world-default-rtdb.firebaseio.com" };
     let db = null;
     try { firebase.initializeApp(firebaseConfig); db = firebase.database(); } catch(e){}
 
@@ -634,9 +634,8 @@
       initDecoOptions();
     }
 
-    /* 방문자 수 (TODAY / TOTAL) 및 최근 방문자 기록 로직 */
     function recordVisit(hostUser, visitorUser) {
-      if (hostUser === visitorUser) return; // 본인 방문 시 집계 제외
+      if (hostUser === visitorUser) return; 
 
       if(!visitorsData[hostUser]) {
         visitorsData[hostUser] = { recent: [], logs: [] };
@@ -648,10 +647,8 @@
 
       const todayStr = new Date().toISOString().slice(0, 10);
 
-      // 방문 로그 추가 (시간, 방문자, 날짜)
       hostData.logs.push({ visitor: visitorUser, date: todayStr, time: new Date().getTime() });
 
-      // 최근 다녀간 친구 태그 업데이트
       hostData.recent = hostData.recent.filter(name => name !== visitorUser);
       hostData.recent.unshift(visitorUser);
       if(hostData.recent.length > 5) hostData.recent = hostData.recent.slice(0, 5); 
@@ -665,15 +662,11 @@
       const logs = hostData.logs || [];
       const recent = hostData.recent || [];
 
-      // TODAY: 오늘 접속한 중복 없는 방문자 수
       const todayStr = new Date().toISOString().slice(0, 10);
       const todayVisitors = new Set(logs.filter(l => l.date === todayStr).map(l => l.visitor));
       document.getElementById('today-cnt').innerText = todayVisitors.size;
-
-      // TOTAL: 총 누적 방문 횟수
       document.getElementById('total-cnt').innerText = logs.length;
 
-      // 최근 방문자 태그 표시
       const box = document.getElementById('visitor-list');
       box.innerHTML = '';
       if(recent.length === 0) {
